@@ -1,0 +1,208 @@
+---
+title: "WHO Suicide Rate"
+author: "Adelia Januarto"
+format: html
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999, digits = 3)
+library(tidyverse)
+library(scales)
+```
+
+# 1 Data Preparation
+
+The data for this analysis was taken from [Kaggle](https://www.kaggle.com/datasets/szamil/who-suicide-statistics).
+
+```{r}
+# Import data
+suicide <- 
+  read_csv("who_suicide_statistics.csv",
+                    show_col_types = F)
+
+# Display the data
+suicide
+```
+
+```{r}
+# Total of missing values
+suicide %>% 
+  is.na() %>%
+  sum()
+```
+
+```{r}
+# Total of duplicated files
+suicide %>%
+  duplicated() %>%
+  sum()
+```
+
+```{r}
+# Remove missing values
+suicide <- 
+  suicide %>%
+  na.omit()
+
+# Display data after NA removal
+suicide
+```
+
+# Q1: How is the trend of suicide cases over years?
+
+```{r}
+options(dplyr.summarise.inform = FALSE)
+suicide %>%
+  group_by(year) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  ggplot(aes(x = year, y = sum.suicides_prop)) + 
+  geom_line(color = "#990000") + 
+  scale_y_continuous(limits = c(0, 170)) +
+  theme_bw() +
+  annotate("rect", xmin = 2013.5, xmax = 2018, 
+           ymin = 23, ymax = 125, alpha = 0.1) +
+  labs(title = "Global trend of suicide rates (1979 - 2016)", 
+       x = "Year", y = "Rate")
+```
+
+```{r}
+suicide %>%
+  group_by(year, sex) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  ggplot(aes(x = year, y = sum.suicides_prop)) + 
+  geom_line(aes(group = sex, color = sex)) +
+  scale_color_manual(values = c("steelblue","#379237")) +
+  scale_y_continuous(limits = c(0, 170)) +
+  labs(title = "Suicide rates across genders (1979 - 2016)", 
+       x = "Year", y = "Rate") + theme_bw() +
+  theme(legend.position = "bottom", 
+        legend.title = element_blank())
+```
+
+# Q2: Which countries have most suicide cases?
+
+```{r}
+options(scipen = 999)
+options(dplyr.summarise.inform = FALSE)
+suicide.cases <-
+  suicide %>%
+  group_by(country) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  ungroup() %>%
+  arrange(desc(sum.suicides_prop))
+
+mean <- 
+  suicide.cases %>%
+  top_n(20, sum.suicides_prop) %>%
+  summarise(mean.suicides = mean(sum.suicides_prop))
+
+suicide.cases %>%
+  top_n(20, sum.suicides_prop) %>%
+  ggplot(aes(x = reorder(country, sum.suicides_prop), 
+             y = sum.suicides_prop)) +
+  geom_hline(yintercept = mean$mean.suicides, color = "gray30")  +
+  geom_point(size = 4, color = "#990000") +
+  coord_flip() + theme_bw() +
+  labs(title = "Suicide rates in 20 countries (1979 - 2016)", 
+       x = "Country",
+       y = "Rate")
+```
+
+# Q3: Do suicide cases show similar tendencies across age groups?
+
+```{r}
+suicide %>%
+  group_by(age) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  ggplot(aes(x = reorder(age, sum.suicides_prop), y = sum.suicides_prop)) +
+  geom_col(fill = "#990000") + theme_bw() +
+    labs(title = "Global suicide rates by age groups (1979 - 2016)",
+         x = "Age group", y = "Rate")
+```
+
+# Q4: Are there any changes of suicide cases in a specific period of time in countries with the highest suicide cases?
+
+```{r}
+dumbbell.data <- 
+  suicide %>%
+  filter(year %in% c(2000, 2015)) %>%
+    filter(country %in% c("Hungary", "Lithuania", 
+                        "Russian Federation", "Latvia", 
+                        "Estonia", "Kazakhstan", "Slovenia", 
+                        "Austria", "Ukraine", "Japan",
+                        "Belgium", "Croatia", 
+                        "Republic of Korea", 
+                        "Singapore", "Findland")) %>%
+  group_by(country, year) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  mutate(country = factor(country)) %>%
+  arrange(year)
+
+dumbbell.data %>%
+  pivot_wider(names_from = "year", 
+              values_from = "sum.suicides_prop") %>%
+  mutate(diff = `2015` - `2000`) %>%
+  mutate(percentage = (`2015`/`2000`)*100) %>%
+  arrange(diff)
+```
+
+```{r}
+data.2000 <-
+  dumbbell.data %>%
+  filter(year == 2000)
+data.2015 <-
+  dumbbell.data %>%
+  filter(year == 2015)
+
+ggplot(dumbbell.data, 
+       aes(x = sum.suicides_prop,
+           y = reorder(country, sum.suicides_prop))) +
+  geom_point((aes(color = factor(year))), size = 6,
+             show.legend = T) +
+  geom_segment(
+    data = data.2000,
+    aes(
+      x = sum.suicides_prop,
+      y = country,
+      yend = data.2015$country,
+      xend = data.2015$sum.suicides_prop
+    ),
+    color = "#aeb6bf",
+    linewidth = 4.5,
+    alpha = 0.5
+  ) +
+  geom_vline(xintercept = mean(dumbbell.data$sum.suicides_prop)) +
+  scale_color_manual(values = c("#990000", "#F49D1A")) +
+  labs(
+    title = "Suicide rate changes between 2000 and 2015",
+    x = "Rate",
+    y = "Country",
+    caption = "Disclaimer: Exclusion for countries without
+       the 2000 and 2015 data pair"
+  ) +
+  theme_bw() + theme(legend.title = element_blank()) 
+```
+
+```{r}
+dumbbell.data %>%
+  pivot_wider(names_from = "year",
+              values_from = "sum.suicides_prop") %>%
+  mutate(diff = `2015` - `2000`) %>%
+  mutate(diff = round(diff, 2)) %>%
+  arrange(diff) %>%
+  ggplot(aes(x = reorder(country,-diff), y = diff)) +
+  geom_col(fill = "#aeb6bf", alpha = 0.5) + 
+  geom_label(aes(label = diff), fill = "white", size = 2.5) +
+  coord_flip() + theme_bw() + 
+  labs(title = "Suicide rate differences (2000 and 2015)",
+       x = "", y = "Difference value",
+       caption = "Disclaimer: Exclusion for countries without
+       the 2000 and 2015 data pair")
+```

@@ -1,0 +1,226 @@
+---
+title: "Has the global suicide rate fallen?"
+output: 
+  flexdashboard::flex_dashboard:
+    theme:
+      bg: "#FFFFFF"
+      fg: "#000000" 
+      primary: "#990000"
+      base_font:
+        google: Prompt
+      code_font:
+        google: JetBrains Mono
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(scales)
+library(plotly)
+
+# load dataset
+suicide <- 
+  read_csv("who_suicide_statistics.csv", show_col_types = F)
+
+# remove NAs
+suicide <- 
+  suicide %>%
+  na.omit()
+```
+
+Page 1
+=======================================================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Q1.1 How is the trend of suicide cases over years?
+
+```{r}
+options(dplyr.summarise.inform = FALSE)
+viz_a <-
+  suicide %>%
+  group_by(year) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  ggplot(aes(x = year, y = sum.suicides_prop)) + 
+  geom_line(color = "#990000") + 
+  scale_y_continuous(limits = c(0, 170)) +
+  theme_bw() +
+  annotate("rect", xmin = 2013.5, xmax = 2018, 
+           ymin = 23, ymax = 125, alpha = 0.1) +
+  labs(title = "Global trend of suicide rates (1979 - 2016)", 
+       x = "Year", y = "Rate")
+
+ggplotly(viz_a)
+```
+
+### Q1.2 Are the rates of suicide cases identical across genders?
+
+```{r}
+viz_b <-
+  suicide %>%
+  group_by(year, sex) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  ggplot(aes(x = year, y = sum.suicides_prop)) + 
+  geom_line(aes(group = sex, color = sex)) +
+  scale_color_manual(values = c("steelblue","#379237")) +
+  scale_y_continuous(limits = c(0, 170)) +
+  labs(title = "Suicide rates across genders (1979 - 2016)", 
+       x = "Year", y = "Rate") + theme_bw()
+
+ggplotly(viz_b)
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Q2. Which countries have most suicide cases?
+
+```{r}
+options(dplyr.summarise.inform = FALSE)
+suicide.cases <-
+  suicide %>%
+  group_by(country) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  ungroup() %>%
+  arrange(desc(sum.suicides_prop))
+
+mean <- 
+  suicide.cases %>%
+  top_n(20, sum.suicides_prop) %>%
+  summarise(mean.suicides = mean(sum.suicides_prop))
+
+viz_c <- 
+  suicide.cases %>%
+  top_n(20, sum.suicides_prop) %>%
+  ggplot(aes(x = reorder(country, sum.suicides_prop), 
+             y = sum.suicides_prop)) +
+  geom_hline(yintercept = mean$mean.suicides, color = "gray30")  +
+  geom_point(size = 4, color = "#990000") +
+  coord_flip() + theme_bw() +
+  labs(title = "Suicide rates in 20 countries (1979 - 2016)", 
+       x = "Country",
+       y = "Rate")
+
+ggplotly(viz_c)
+```
+
+Page 2
+=======================================================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Q3. Do suicide cases show similar tendencies across age groups?
+
+```{r}
+viz_d <-
+  suicide %>%
+  group_by(age) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  ggplot(aes(x = reorder(age, sum.suicides_prop), y = sum.suicides_prop)) +
+  geom_col(fill = "#990000") + theme_bw() +
+    labs(title = "Global suicide rates by age groups (1979 - 2016)",
+         x = "Age group", y = "Rate")
+ggplotly(viz_d)
+```
+
+
+Column {data-width=500, .tabset .tabset-fade}
+-----------------------------------------------------------------------
+### Q4.1 Any changes in a period of time?
+
+```{r, include=F}
+dumbbell.data <- 
+  suicide %>%
+  filter(year %in% c(2000, 2015)) %>%
+    filter(country %in% c("Hungary", "Lithuania", 
+                        "Russian Federation", "Latvia", 
+                        "Estonia", "Kazakhstan", "Slovenia", 
+                        "Austria", "Ukraine", "Japan",
+                        "Belgium", "Croatia", 
+                        "Republic of Korea", 
+                        "Singapore", "Findland")) %>%
+  group_by(country, year) %>%
+  mutate(suicides_prop = (suicides_no/population)*1000) %>%
+  summarise(sum.suicides_prop = sum(suicides_prop)) %>%
+  mutate(country = factor(country)) %>%
+  arrange(year)
+
+dumbbell.data %>%
+  pivot_wider(names_from = "year", 
+              values_from = "sum.suicides_prop") %>%
+  mutate(diff = `2015` - `2000`) %>%
+  mutate(percentage = (`2015`/`2000`)*100) %>%
+  arrange(diff)
+```
+
+
+```{r}
+data.2000 <-
+  dumbbell.data %>%
+  filter(year == 2000)
+data.2015 <-
+  dumbbell.data %>%
+  filter(year == 2015)
+
+viz_e <-
+  ggplot(dumbbell.data, 
+       aes(x = sum.suicides_prop,
+           y = reorder(country, sum.suicides_prop))) +
+  geom_point((aes(color = factor(year))), size = 6,
+             show.legend = T) +
+  geom_segment(
+    data = data.2000,
+    aes(
+      x = sum.suicides_prop,
+      y = country,
+      yend = data.2015$country,
+      xend = data.2015$sum.suicides_prop
+    ),
+    color = "#aeb6bf",
+    linewidth = 3.5,
+    alpha = 0.5
+  ) +
+  geom_vline(xintercept = mean(dumbbell.data$sum.suicides_prop)) +
+  scale_color_manual(values = c("#990000", "#F49D1A")) +
+  labs(
+    title = "Suicide rate changes between 2000 and 2015",
+    x = "Rate",
+    y = "Country",
+    caption = "Disclaimer: Exclusion for countries without
+       the 2000 and 2015 data pair"
+  ) +
+  theme_bw() + theme(legend.title = element_blank()) 
+
+ggplotly(viz_e)
+```
+
+
+### Q4.2 How big are the changes?
+
+```{r}
+viz_f <- 
+  dumbbell.data %>%
+  pivot_wider(names_from = "year",
+              values_from = "sum.suicides_prop") %>%
+  mutate(diff = `2015` - `2000`) %>%
+  mutate(diff = round(diff, 2)) %>%
+  arrange(diff) %>%
+  ggplot(aes(x = reorder(country,-diff), y = diff)) +
+  geom_col(fill = "#aeb6bf", alpha = 0.5) + 
+  coord_flip() + theme_bw() + 
+  labs(title = "Suicide rate differences (2000 and 2015)",
+       x = "", y = "Difference value",
+       caption = "Disclaimer: Exclusion for countries without
+       the 2000 and 2015 data pair")
+
+ggplotly(viz_f)
+```
+
