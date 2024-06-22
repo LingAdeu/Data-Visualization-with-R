@@ -19,7 +19,7 @@ The data for this analysis was taken from [Kaggle](https://www.kaggle.com/datase
 ```{r}
 # Import data
 suicide <- 
-  read_csv("who_suicide_statistics.csv",
+  read_csv("../data/who_suicide_statistics.csv",
                     show_col_types = F)
 
 # Display the data

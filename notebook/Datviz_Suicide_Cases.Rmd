@@ -22,7 +22,7 @@ library(plotly)
 
 # load dataset
 suicide <- 
-  read_csv("who_suicide_statistics.csv", show_col_types = F)
+  read_csv("../data/who_suicide_statistics.csv", show_col_types = F)
 
 # remove NAs
 suicide <- 
@@ -223,4 +223,3 @@ viz_f <-
 
 ggplotly(viz_f)
 ```
-
